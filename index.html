@@ -19,59 +19,67 @@
 <meta name="application-name" content="Falling Ghost">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-  :root { --canvas:#eae2cf; --canvas-2:#ded4bd; --ink:#1c1714; --ink-soft:#3a322c; --ink-dim:#8a7f70; --blue:#2a9fe6; --red:#d11f38; }
+  :root { --canvas:#eae2cf; --canvas-2:#ded4bd; --ink:#1c1714; --ink-soft:#3a322c; --ink-dim:#8a7f70; --blue:#2a9fe6; --red:#d11f38; --pix:'Press Start 2P','Courier New',monospace; }
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { height:100%; background:var(--canvas); overflow:hidden; }
-  body { display:flex; flex-direction:column; align-items:stretch; font-family:'Fraunces',serif; color:var(--ink); touch-action:none; user-select:none; }
+  body { display:flex; flex-direction:column; align-items:stretch; font-family:var(--pix); color:var(--ink); touch-action:none; user-select:none; }
   /* Werbebanner oben/unten: reservierter, sichtbarer Platz (zaehlt als Impression/CPM) */
   .adbar { flex:0 0 auto; display:flex; align-items:center; justify-content:center; width:100%;
            min-height:56px; background:var(--canvas-2); position:relative; z-index:6; overflow:hidden; }
   #adTop { border-bottom:1px solid rgba(28,23,20,.18); padding-top:env(safe-area-inset-top,0px); }
   #adBottom { border-top:1px solid rgba(28,23,20,.18); padding-bottom:env(safe-area-inset-bottom,0px); }
   .adbar .ad-slot { display:flex; align-items:center; justify-content:center; width:100%; max-width:728px;
-                    min-height:50px; color:var(--ink-dim); font-family:'Cormorant Garamond',serif;
+                    min-height:50px; color:var(--ink-dim); font-family:var(--pix);
                     letter-spacing:.18em; text-transform:uppercase; font-size:12px; }
   /* Platzhalter-Optik (verschwindet, sobald echtes Ad-Snippet eingesetzt ist) */
   .ad-slot.placeholder { border:1px dashed rgba(28,23,20,.28); border-radius:2px; }
-  .adbar .ad-label { position:absolute; top:2px; left:8px; font-family:'Cormorant Garamond',serif;
+  .adbar .ad-label { position:absolute; top:2px; left:8px; font-family:var(--pix);
                      font-size:9px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-dim); opacity:.7; }
   @media (min-width:760px){ .adbar { min-height:96px; } .adbar .ad-slot { min-height:90px; } }
   #play { flex:1 1 auto; display:flex; align-items:center; justify-content:center; min-height:0; }
   #stage { position:relative; width:100%; height:100%; max-width:520px; }
-  canvas { display:block; width:100%; height:100%; background:var(--canvas); }
+  canvas { display:block; width:100%; height:100%; background:var(--canvas); image-rendering:pixelated; image-rendering:crisp-edges; }
   .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:32px; gap:18px; transition:opacity .25s ease; }
   #over { background:radial-gradient(ellipse at center, rgba(234,226,207,.78), rgba(222,212,189,.93)); backdrop-filter:blur(1.5px); }
   #start { justify-content:space-between; padding:54px 32px 44px; background:linear-gradient(180deg, rgba(234,226,207,.92) 0%, rgba(234,226,207,.14) 28%, rgba(234,226,207,.10) 62%, rgba(234,226,207,.94) 100%); }
   .topblock,.botblock { display:flex; flex-direction:column; align-items:center; gap:14px; }
   .hidden { opacity:0; pointer-events:none; }
-  .title { font-size:clamp(34px,10.5vw,58px); font-weight:300; letter-spacing:.08em; line-height:.96; color:var(--ink); text-shadow:0 2px 24px rgba(234,226,207,.7); }
-  .title em { font-style:italic; font-weight:400; color:var(--red); }
-  .kicker { font-family:'Cormorant Garamond',serif; letter-spacing:.42em; text-transform:uppercase; font-size:12px; color:var(--ink-dim); }
-  .sub { font-family:'Cormorant Garamond',serif; font-size:clamp(15px,4.3vw,19px); color:var(--ink-soft); max-width:30ch; line-height:1.45; text-shadow:0 1px 16px rgba(234,226,207,.8); }
-  .hint { font-family:'Cormorant Garamond',serif; font-size:15px; color:var(--ink-dim); letter-spacing:.05em; }
+  .title { font-size:clamp(22px,7.2vw,40px); font-weight:400; letter-spacing:0; line-height:1.25; color:var(--ink); text-shadow:0 3px 0 rgba(28,23,20,.25); }
+  .title em { font-style:normal; font-weight:400; color:var(--red); }
+  .kicker { font-family:var(--pix); letter-spacing:.18em; text-transform:uppercase; font-size:8px; color:var(--ink-dim); }
+  .sub { font-family:var(--pix); font-size:clamp(9px,2.6vw,12px); color:var(--ink-soft); max-width:26ch; line-height:1.9; }
+  .hint { font-family:var(--pix); font-size:9px; line-height:1.8; color:var(--ink-dim); letter-spacing:0; }
   .pulse { animation:pulse 2.2s ease-in-out infinite; } @keyframes pulse { 0%,100%{opacity:.45} 50%{opacity:1} }
   .modes { display:flex; border:1px solid var(--ink); border-radius:2px; overflow:hidden; background:rgba(234,226,207,.4); }
-  .modes button { font-family:'Cormorant Garamond',serif; font-size:14px; letter-spacing:.12em; text-transform:uppercase; background:transparent; color:var(--ink-soft); border:none; padding:10px 18px; cursor:pointer; }
-  .modes button.on { background:var(--ink); color:var(--canvas); font-weight:600; }
-  .card { border:1px solid var(--ink); border-radius:3px; padding:26px 30px; background:rgba(234,226,207,.55); display:flex; flex-direction:column; gap:6px; align-items:center; min-width:240px; box-shadow:0 10px 40px rgba(28,23,20,.18); }
-  .card .label { font-family:'Cormorant Garamond',serif; letter-spacing:.3em; text-transform:uppercase; font-size:12px; color:var(--ink-dim); }
-  .card .depth { font-size:clamp(48px,16vw,76px); font-weight:300; color:var(--ink); line-height:1; }
-  .card .depth span { font-size:.4em; color:var(--ink-dim); letter-spacing:.05em; }
-  .card .meta { font-family:'Cormorant Garamond',serif; font-size:15px; color:var(--ink-dim); margin-top:4px; }
-  .card .best { font-family:'Cormorant Garamond',serif; font-size:14px; color:var(--ink-dim); }
+  .modes button { font-family:var(--pix); font-size:9px; letter-spacing:0; text-transform:uppercase; background:transparent; color:var(--ink-soft); border:none; padding:11px 16px; cursor:pointer; }
+  .modes button.on { background:var(--ink); color:var(--canvas); }
+  .card { border:2px solid var(--ink); border-radius:0; padding:24px 26px; background:rgba(234,226,207,.7); display:flex; flex-direction:column; gap:10px; align-items:center; min-width:240px; box-shadow:6px 6px 0 rgba(28,23,20,.35); }
+  .card .label { font-family:var(--pix); letter-spacing:.12em; text-transform:uppercase; font-size:9px; color:var(--ink-dim); }
+  .card .depth { font-size:clamp(34px,11vw,56px); font-weight:400; color:var(--ink); line-height:1.1; }
+  .card .depth span { font-size:.4em; color:var(--ink-dim); letter-spacing:0; }
+  .card .meta { font-family:var(--pix); font-size:9px; line-height:1.7; color:var(--ink-dim); margin-top:4px; }
+  .card .best { font-family:var(--pix); font-size:9px; color:var(--ink-dim); }
   .btnrow { display:flex; gap:10px; }
-  .btn { font-family:'Cormorant Garamond',serif; font-size:15px; letter-spacing:.1em; text-transform:uppercase; background:rgba(234,226,207,.35); color:var(--ink); border:1px solid var(--ink); border-radius:2px; padding:12px 26px; cursor:pointer; transition:all .15s ease; }
+  .btn { font-family:var(--pix); font-size:10px; letter-spacing:0; text-transform:uppercase; background:rgba(234,226,207,.5); color:var(--ink); border:2px solid var(--ink); border-radius:0; padding:13px 20px; cursor:pointer; transition:all .12s ease; box-shadow:3px 3px 0 rgba(28,23,20,.35); }
   .btn:hover { border-color:var(--red); color:var(--red); }
   .btn.primary { background:var(--ink); color:var(--canvas); border-color:var(--ink); font-weight:600; }
   .btn.primary:hover { background:var(--red); border-color:var(--red); }
-  #hud { position:absolute; top:18px; left:0; right:0; text-align:center; pointer-events:none; font-weight:300; font-size:clamp(30px,9vw,44px); letter-spacing:.02em; color:var(--ink); text-shadow:0 1px 12px rgba(234,226,207,.9); transition:transform .12s ease; }
-  #hud.bump { transform:scale(1.18); }
-  #hud small { font-family:'Cormorant Garamond',serif; font-size:.4em; color:var(--ink-dim); letter-spacing:.1em; }
-  #modeTag { position:absolute; top:24px; right:20px; font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.25em; text-transform:uppercase; color:var(--ink-dim); pointer-events:none; text-shadow:0 1px 8px rgba(234,226,207,.8); }
-  #mute { position:absolute; top:18px; left:18px; font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-soft); background:rgba(234,226,207,.5); border:1px solid var(--ink); border-radius:2px; padding:6px 10px; cursor:pointer; z-index:5; }
-  .toast { position:absolute; bottom:36px; left:50%; transform:translateX(-50%); font-family:'Cormorant Garamond',serif; font-size:14px; letter-spacing:.1em; color:var(--red); opacity:0; transition:opacity .3s ease; pointer-events:none; }
+  /* Retro-Score-Box oben links */
+  #hud { position:absolute; top:12px; left:12px; pointer-events:none; transition:transform .12s ease; z-index:4; }
+  #hud.bump { transform:scale(1.12); }
+  .scorebox { background:rgba(234,226,207,.88); border:2px solid var(--ink); padding:7px 10px 8px; display:inline-block; text-align:left; box-shadow:3px 3px 0 rgba(28,23,20,.4); }
+  .scorebox .sl { font-family:var(--pix); font-size:8px; letter-spacing:.06em; color:var(--ink-soft); }
+  .scorebox .sv { font-family:var(--pix); font-size:22px; line-height:1.2; color:var(--red); margin:3px 0 4px; }
+  .scorebox .sb { font-family:var(--pix); font-size:8px; letter-spacing:.04em; color:var(--ink-dim); }
+  #modeTag { position:absolute; top:44px; right:14px; font-family:var(--pix); font-size:8px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); pointer-events:none; text-align:right; }
+  #mute { position:absolute; top:12px; right:14px; font-family:var(--pix); font-size:8px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); background:rgba(234,226,207,.6); border:2px solid var(--ink); border-radius:0; padding:7px 9px; cursor:pointer; z-index:5; }
+  /* Pixel-Logo unten links */
+  #brand { position:absolute; left:12px; bottom:12px; pointer-events:none; font-family:var(--pix); line-height:1.15; z-index:4; text-shadow:2px 2px 0 rgba(28,23,20,.4); }
+  #brand .b1 { font-size:13px; color:var(--ink); }
+  #brand .b2 { font-size:13px; color:var(--red); }
+  .toast { position:absolute; bottom:48px; left:50%; transform:translateX(-50%); font-family:var(--pix); font-size:9px; letter-spacing:.04em; color:var(--red); opacity:0; transition:opacity .3s ease; pointer-events:none; }
   .toast.show { opacity:1; }
 </style>
 </head>
@@ -97,7 +105,14 @@
 <div id="stage">
   <canvas id="c"></canvas>
   <button id="mute">Klang an</button>
-  <div id="hud" class="hidden"><span id="depth">0</span><small> m</small></div>
+  <div id="hud" class="hidden">
+    <div class="scorebox">
+      <div class="sl">Score</div>
+      <div class="sv"><span id="depth">0</span></div>
+      <div class="sb">Beste: <span id="hudBest">0</span></div>
+    </div>
+  </div>
+  <div id="brand" class="hidden"><div class="b1">FALLING</div><div class="b2">GHOST</div></div>
   <div id="modeTag" class="hidden"></div>
   <div class="toast" id="toast"></div>
   <div class="overlay" id="start">
@@ -221,7 +236,8 @@ const WALLTEX3_SRC="walltex3.png";
   function menuEdges(d){return {t:(0.5-CFG.introHalf+0.012*Math.sin(d*0.004))*H, b:(0.5+CFG.introHalf-0.012*Math.sin(d*0.004+1.5))*H};}
   function biome(d){return 0.5+0.5*Math.sin(d*CFG.biomeFreq);}
 
-  function resize(){DPR=Math.min(window.devicePixelRatio||1,2);W=stage.clientWidth;H=stage.clientHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);scale=H/800;}
+  const PIXEL=3; // CSS-Pixel pro gerendertem Pixel (Retro-Koernung)
+  function resize(){W=stage.clientWidth;H=stage.clientHeight;const bw=Math.max(1,Math.round(W/PIXEL)),bh=Math.max(1,Math.round(H/PIXEL));cv.width=bw;cv.height=bh;ctx.setTransform(bw/W,0,0,bh/H,0,0);ctx.imageSmoothingEnabled=false;scale=H/800;}
   window.addEventListener('resize', resize);
 
   function press(){SND.init();SND.resume();if(state==='play'){ember.held=true;SND.thrust(true);}else start();}
@@ -238,7 +254,7 @@ const WALLTEX3_SRC="walltex3.png";
     speed=CFG.baseSpeed*scale;particles=[];trail=[];shake=0;wob=0;
     camY=0;milestoneFlash=0;hitFlash=0;lastMile=0;timeScale=1;hitStop=0;wasNear=false;
     state='play';SND.enterPlay();
-    $('start').classList.add('hidden');$('over').classList.add('hidden');$('hud').classList.remove('hidden');
+    $('start').classList.add('hidden');$('over').classList.add('hidden');$('hud').classList.remove('hidden');$('brand').classList.remove('hidden');$('hudBest').textContent=best[mode];
     const tag=$('modeTag');tag.classList.remove('hidden');tag.textContent=mode==='daily'?('Taeglich - '+shortDate()):'Endlos';
   }
   function shortDate(){const d=new Date();return d.getDate()+'.'+(d.getMonth()+1)+'.';}
@@ -252,7 +268,7 @@ const WALLTEX3_SRC="walltex3.png";
   }
   function showOver(){
     const m=meters();
-    $('hud').classList.add('hidden');$('modeTag').classList.add('hidden');
+    $('hud').classList.add('hidden');$('brand').classList.add('hidden');$('modeTag').classList.add('hidden');
     $('ovDepth').textContent=m;$('ovBest').textContent='Beste Strecke - '+best[mode]+' m';
     $('ovLabel').textContent=(m>=best[mode]&&m>0)?'Weiteste Strecke':'Zerlaufen';
     $('ovMeta').textContent=mode==='daily'?('Taeglicher Lauf - '+dailyKey):'Endlos-Modus';
