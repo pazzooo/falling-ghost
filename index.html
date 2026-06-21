@@ -174,7 +174,7 @@ const WALLTEX3_SRC="walltex3.png";
     warpF:0.0016, warpAmp:90, fineF:0.045, fineAmp:0.02, dripMaskF:0.0012, dripMaskTh:0.5, dripF:0.02, dripAmp:0.05, dripSharp:3.0,
     camLead:1.7, slowmoFloor:0.72, hitStopMs:80, milestone:50,
     bgParallax:0.28, biomeFreq:0.0006, trailMax:48,
-    spriteH:39, headFrac:0.34, diveK:1.05, leanEase:0.10, heroScale:1.5,
+    spriteH:39, headFrac:0.34, diveK:1.05, upScale:0.6, leanEase:0.10, heroScale:1.5,
   };
 
   const SND = (()=>{
@@ -387,7 +387,8 @@ const WALLTEX3_SRC="walltex3.png";
     const sc=(CFG.heroScale+(1-CFG.heroScale)*k)*scale; // 1.5x -> 1.0x
     if(!charImg.__r){ctx.fillStyle=cssv('--ink');ctx.beginPath();ctx.arc(x,y,9*scale,0,Math.PI*2);ctx.fill();return;}
     const hgt=CFG.spriteH*sc,wdt=hgt*(charImg.width/charImg.height);
-    const target=Math.atan2(ember.vy*CFG.diveK,Math.max(0.001,speed))*k; // Kopf folgt der Flugbahn
+    const kv=CFG.diveK*(ember.vy<0?CFG.upScale:1); // nach oben flacher als beim Sturz
+    const target=Math.atan2(ember.vy*kv,Math.max(0.001,speed))*k; // Kopf folgt der Flugbahn
     leanCur+=(target-leanCur)*CFG.leanEase; // Traegheit: nimmt den Trieb kurz mit, statt sofort zu kippen
     const lean=leanCur+Math.sin(wob*0.5)*0.02;
     ctx.save();ctx.translate(x,y);ctx.rotate(lean);if(CFG.faceFlip)ctx.scale(-1,1);
