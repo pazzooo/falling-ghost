@@ -238,6 +238,7 @@ const WALLTEX3_SRC="walltex3.png";
 
   const PIXEL=3; // CSS-Pixel pro gerendertem Pixel (Retro-Koernung)
   function resize(){W=stage.clientWidth;H=stage.clientHeight;const bw=Math.max(1,Math.round(W/PIXEL)),bh=Math.max(1,Math.round(H/PIXEL));cv.width=bw;cv.height=bh;ctx.setTransform(bw/W,0,0,bh/H,0,0);ctx.imageSmoothingEnabled=false;scale=H/800;}
+  function snapPx(v){ const s=W/cv.width; return Math.round(v/s)*s; } // logischen Wert aufs Backing-Pixelraster runden
   window.addEventListener('resize', resize);
 
   function press(){SND.init();SND.resume();if(state==='play'){ember.held=true;SND.thrust(true);}else start();}
@@ -303,7 +304,7 @@ const WALLTEX3_SRC="walltex3.png";
     if(hitStop>0){ctx.save();bg();tunnel();inkTrail();character();ctx.restore();blot();return;}
     let sx=0,sy=0;if(shake>0){sx=(Math.random()-0.5)*shake;sy=(Math.random()-0.5)*shake;shake*=0.86;if(shake<0.4)shake=0;}
     const tcy=Math.max(-H*0.12,Math.min(H*0.12,-ember.vy*CFG.camLead));camY+=(tcy-camY)*0.1;
-    ctx.save();ctx.translate(sx,sy+camY);
+    ctx.save();ctx.translate(snapPx(sx),snapPx(sy+camY)); // aufs Pixelraster einrasten -> kein Flimmern
     bg();
     if(state==='menu'){ menuFrames(); heroGhost(); }
     else { tunnel();inkTrail();if(state==='play')character();parts(); }
@@ -332,7 +333,7 @@ const WALLTEX3_SRC="walltex3.png";
     pathFn();
     ctx.fillStyle='#0d0d12'; ctx.fill();
     ctx.clip();
-    if(wallPat){ const off=worldScroll()%wallTileW; ctx.save(); ctx.translate(-off,0);
+    if(wallPat){ const off=snapPx(worldScroll()%wallTileW); ctx.save(); ctx.translate(-off,0);
       ctx.fillStyle=wallPat; ctx.fillRect(-wallTileW,-40,W+wallTileW*2,H+80);
       const bf2=wallFade(600,40);   // ab 600m: blaue Wirbel-Textur
       if(bf2>0&&wallPat2){ ctx.globalAlpha=bf2; ctx.fillStyle=wallPat2; ctx.fillRect(-wallTileW,-40,W+wallTileW*2,H+80); ctx.globalAlpha=1; }
