@@ -308,7 +308,7 @@ const WALLTEX_SRC="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBA
   function fillInk(pathFn, shadowY){
     ctx.save();
     pathFn();
-    ctx.save(); ctx.shadowColor='rgba(20,24,32,0.42)'; ctx.shadowBlur=12*scale; ctx.shadowOffsetY=shadowY; ctx.fillStyle='#0d0d12'; ctx.fill(); ctx.restore();
+    ctx.fillStyle='#0d0d12'; ctx.fill();
     ctx.clip();
     if(wallPat){ const off=(worldScroll()*0.6)%wallTileW; ctx.save(); ctx.translate(-off,0); ctx.fillStyle=wallPat; ctx.fillRect(-wallTileW,-40,W+wallTileW*2,H+80); ctx.restore(); }
     else { ctx.fillStyle='#0d0d12'; ctx.fillRect(-40,-40,W+80,H+80); }
