@@ -174,7 +174,7 @@ const WALLTEX3_SRC="walltex3.png";
     warpF:0.0016, warpAmp:90, fineF:0.045, fineAmp:0.02, dripMaskF:0.0012, dripMaskTh:0.5, dripF:0.02, dripAmp:0.05, dripSharp:3.0,
     camLead:1.7, slowmoFloor:0.72, hitStopMs:80, milestone:50,
     bgParallax:0.28, biomeFreq:0.0006, trailMax:48,
-    spriteH:39, headFrac:0.34, lean:0.05, heroScale:1.5,
+    spriteH:39, headFrac:0.34, diveK:1.7, heroScale:1.5,
   };
 
   const SND = (()=>{
@@ -387,7 +387,7 @@ const WALLTEX3_SRC="walltex3.png";
     const sc=(CFG.heroScale+(1-CFG.heroScale)*k)*scale; // 1.5x -> 1.0x
     if(!charImg.__r){ctx.fillStyle=cssv('--ink');ctx.beginPath();ctx.arc(x,y,9*scale,0,Math.PI*2);ctx.fill();return;}
     const hgt=CFG.spriteH*sc,wdt=hgt*(charImg.width/charImg.height);
-    const lean=Math.max(-0.5,Math.min(0.5,ember.vy*CFG.lean))+Math.sin(wob*0.5)*0.02;
+    const lean=Math.atan2(ember.vy*CFG.diveK,Math.max(0.001,speed))*k+Math.sin(wob*0.5)*0.02; // Kopf folgt der Flugbahn -> Sturzflug beim Fallen
     ctx.save();ctx.translate(x,y);ctx.rotate(lean);if(CFG.faceFlip)ctx.scale(-1,1);
     if(k<1){const a=(1-k)*0.18;const ga=ctx.createRadialGradient(0,0,0,0,0,hgt*0.5);ga.addColorStop(0,'rgba(209,31,56,'+a+')');ga.addColorStop(1,'rgba(209,31,56,0)');ctx.fillStyle=ga;ctx.beginPath();ctx.arc(0,0,hgt*0.5,0,Math.PI*2);ctx.fill();}
     if(nearGlow>0.3){const g=ctx.createRadialGradient(0,0,0,0,0,hgt*0.4);g.addColorStop(0,'rgba(209,31,56,'+(nearGlow*0.4)+')');g.addColorStop(1,'rgba(209,31,56,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,hgt*0.4,0,Math.PI*2);ctx.fill();}
