@@ -310,7 +310,7 @@ const WALLTEX_SRC="walltex.jpg";
     pathFn();
     ctx.fillStyle='#0d0d12'; ctx.fill();
     ctx.clip();
-    if(wallPat){ const off=(worldScroll()*0.6)%wallTileW; ctx.save(); ctx.translate(-off,0); ctx.fillStyle=wallPat; ctx.fillRect(-wallTileW,-40,W+wallTileW*2,H+80); ctx.restore(); }
+    if(wallPat){ const off=worldScroll()%wallTileW; ctx.save(); ctx.translate(-off,0); ctx.fillStyle=wallPat; ctx.fillRect(-wallTileW,-40,W+wallTileW*2,H+80); ctx.restore(); }
     else { ctx.fillStyle='#0d0d12'; ctx.fillRect(-40,-40,W+80,H+80); }
     const bl=biome(worldScroll());
     if(bl>0.02){ ctx.fillStyle='rgba(38,140,220,'+(bl*0.20)+')'; ctx.fillRect(-40,-40,W+80,H+80); }
