@@ -110,16 +110,11 @@ const WALLTEX_SRC="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBA
     emberR:9, hitboxMul:0.66, nearMiss:22, pxPerMeter:18,
     minClear:0.125, introMeters:20, introHalf:0.30,
     elevAmp1:0.16, elevF1:0.0011, elevAmp2:0.08, elevF2:0.0031, elevAmp3:0.04, elevF3:0.0078,
-    widBase:0.15, widAmp1:0.115, widF1:0.0020, widAmp2:0.06, widF2:0.0049, widMin:0.10, widMax:0.25,
+    widBase:0.15, widAmp1:0.115, widF1:0.0020, widAmp2:0.06, widF2:0.0049, widMin:0.085, widMax:0.25,
     bumpAmp1:0.072, bumpF1a:0.015, bumpF1b:0.013, bumpAmp2:0.04, bumpF2a:0.031, bumpF2b:0.026, bumpThresh:0.42,
     camLead:1.7, slowmoFloor:0.72, hitStopMs:80, milestone:50,
     bgParallax:0.28, biomeFreq:0.0006, trailMax:48,
     spriteH:132, headFrac:0.34, lean:0.05, heroScale:1.5,
-    // prozedurale Wand-Optik (organisch, unendlich, nie wiederkehrend)
-    surfF:0.0060, surfAmp:0.034, fineF:0.045, fineAmp:0.012,
-    dripMaskF:0.0012, dripMaskTh:0.40, dripF:0.018, dripAmp:0.072, dripSharp:3.4,
-    drip2F:0.060, drip2Amp:0.040, drip2Sharp:5.0,
-    blueF:0.013, blueTh:0.55,
   };
 
   const SND = (()=>{
@@ -163,43 +158,23 @@ const WALLTEX_SRC="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBA
   }
   function refX(){return W*CFG.refXFrac;}
   function worldScroll(){return state==='menu'?menuScroll:ember.dist;}
-
-  // --- prozedurales Rauschen: jede Stelle der Wand wird aus d berechnet ->
-  //     unendlich lang, nie wiederkehrend, voll deterministisch (per Seed) ---
-  function hashN(i){let x=(i^rngSeed)>>>0;x=Math.imul(x^x>>>16,0x7feb352d);x=Math.imul(x^x>>>15,0x846ca68b);x^=x>>>16;return (x>>>0)/4294967296;}
-  function vnoise(x){const i=Math.floor(x),f=x-i,u=f*f*(3-2*f),a=hashN(i),b=hashN(i+1);return a+(b-a)*u;}
-  function fbm(x){let a=0,amp=0.5,fr=1,n=0;for(let o=0;o<4;o++){a+=amp*vnoise(x*fr);n+=amp;amp*=0.5;fr*=2.017;}return a/n;}
-  function ridged(x){return 1-Math.abs(2*vnoise(x)-1);}
-
-  function centerLine(d){return (0.5 + (fbm(d*CFG.elevF1*1.7+11.3)-0.5)*0.34)*H;}
-  function halfBase(d){const w=CFG.widMin+(CFG.widMax-CFG.widMin)*fbm(d*CFG.widF1*1.5+4.7);return w*H;}
-  // organische Wand-Oberflaeche + herabhaengende Tropfen (side:-1 oben, +1 unten),
-  // positive Werte ragen in den Spalt (wie die Tinten-Zungen im Bild)
-  function surf(d,side){
-    const ph=side<0?0:213.4;
-    const lump=(fbm(d*CFG.surfF+ph)-0.5)*2*CFG.surfAmp*H;          // grosse organische Klumpen
-    const fine=(fbm(d*CFG.fineF+ph*3)-0.5)*2*CFG.fineAmp*H;        // feine zerrissene Kante
-    const mask=Math.max(0,fbm(d*CFG.dripMaskF+ph*0.5)-CFG.dripMaskTh)/(1-CFG.dripMaskTh); // Tropfen-Cluster
-    const drip=Math.pow(ridged(d*CFG.dripF+ph*2),CFG.dripSharp)*mask*CFG.dripAmp*H;       // breite Zungen
-    const drip2=Math.pow(ridged(d*CFG.drip2F+ph*7),CFG.drip2Sharp)*mask*CFG.drip2Amp*H;   // duenne Faeden
-    return lump+fine+drip+drip2;
-  }
+  function pulse(x){const s=Math.sin(x);return Math.max(0,s-CFG.bumpThresh)/(1-CFG.bumpThresh);}
+  function centerLine(d){return (0.5 + CFG.elevAmp1*Math.sin(d*CFG.elevF1+P[0]) + CFG.elevAmp2*Math.sin(d*CFG.elevF2+P[1]) + CFG.elevAmp3*Math.sin(d*CFG.elevF3+P[2]))*H;}
+  function halfBase(d){let w=CFG.widBase + CFG.widAmp1*Math.sin(d*CFG.widF1+P[3]) + CFG.widAmp2*Math.sin(d*CFG.widF2+P[4]); w=Math.min(CFG.widMax,Math.max(CFG.widMin,w)); return w*H;}
+  function bumpTop(d){return (CFG.bumpAmp1*pulse(d*CFG.bumpF1a+P[5]) + CFG.bumpAmp2*pulse(d*CFG.bumpF2a+P[6]))*H;}
+  function bumpBot(d){return (CFG.bumpAmp1*pulse(d*CFG.bumpF1b+P[7]) + CFG.bumpAmp2*pulse(d*CFG.bumpF2b+P[8]))*H;}
   function edges(d){
     const introDist=CFG.introMeters*CFG.pxPerMeter;
     let k=Math.min(1,Math.max(0,d/introDist)); k=k*k*(3-2*k); // smoothstep: 0 am Start -> 1 nach Intro
     const cy=0.5*H*(1-k)+centerLine(d)*k;
     const hb=(CFG.introHalf*H)*(1-k)+halfBase(d)*k;
-    let t=cy-hb+surf(d,-1)*k;
-    let b=cy+hb-surf(d, 1)*k;
+    let t=cy-hb+bumpTop(d)*k;
+    let b=cy+hb-bumpBot(d)*k;
     const mc=CFG.minClear*H;
     if(b-t<mc){const m=(t+b)*0.5;t=m-mc*0.5;b=m+mc*0.5;}
     return {t,b};
   }
-  function menuEdges(d){
-    const cy=(0.5+(fbm(d*0.0016+11.3)-0.5)*0.16)*H;
-    const hb=(0.34+0.03*fbm(d*0.0026+4.7))*H;
-    return {t:cy-hb+surf(d,-1)*0.6, b:cy+hb-surf(d,1)*0.6};
-  }
+  function menuEdges(d){return {t:(0.5-0.38+0.015*Math.sin(d*0.004))*H, b:(0.5+0.38-0.015*Math.sin(d*0.004+1.5))*H};}
   function biome(d){return 0.5+0.5*Math.sin(d*CFG.biomeFreq);}
 
   function resize(){DPR=Math.min(window.devicePixelRatio||1,2);W=stage.clientWidth;H=stage.clientHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);scale=H/800;}
@@ -302,7 +277,7 @@ const WALLTEX_SRC="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBA
     ctx.restore();
   }
   function tunnel(){
-    const st=4;
+    const st=6;
     fillInk(()=>{ctx.beginPath();ctx.moveTo(-40,-40);ctx.lineTo(W+40,-40);for(let x=W+10;x>=-10;x-=st){const d=ember.dist+(x-refX());ctx.lineTo(x,edges(d).t);}ctx.closePath();}, 8*scale);
     fillInk(()=>{ctx.beginPath();ctx.moveTo(-40,H+40);ctx.lineTo(W+40,H+40);for(let x=W+10;x>=-10;x-=st){const d=ember.dist+(x-refX());ctx.lineTo(x,edges(d).b);}ctx.closePath();}, -8*scale);
     edge(-1);edge(1);
@@ -313,18 +288,10 @@ const WALLTEX_SRC="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBA
     fillInk(()=>{ctx.beginPath();ctx.moveTo(-40,H+40);ctx.lineTo(W+40,H+40);for(let x=W+10;x>=-10;x-=st){const d=menuScroll+(x-refX());ctx.lineTo(x,menuEdges(d).b);}ctx.closePath();}, -8*scale);
   }
   function edge(which){
-    const st=4, ws=worldScroll(), base=(state==='menu'?menuScroll:ember.dist);
-    const pts=[];
-    for(let x=-12;x<=W+12;x+=st){const d=base+(x-refX());const e=(state==='menu'?menuEdges(d):edges(d));pts.push([x, which<0?e.t:e.b, d]);}
-    const trace=()=>{ctx.beginPath();for(let i=0;i<pts.length;i++){const p=pts[i];i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);}};
-    // blaue Akzente: stellenweise leuchtet die Tinten-Kante blau (wie im Bild)
-    ctx.save();ctx.lineCap='round';ctx.strokeStyle=cssv('--blue');ctx.shadowColor=cssv('--blue');
-    for(const p of pts){const g=fbm(p[2]*CFG.blueF+(which<0?70:190));if(g>CFG.blueTh){const a=(g-CFG.blueTh)/(1-CFG.blueTh);ctx.globalAlpha=a*0.55;ctx.lineWidth=(1.6+a*2.2)*scale;ctx.shadowBlur=10*a;ctx.beginPath();ctx.moveTo(p[0]-st*0.5,p[1]);ctx.lineTo(p[0]+st*0.5,p[1]);ctx.stroke();}}
-    ctx.restore();
-    // Near-Miss-Glow
-    if(nearGlow>0.01&&state==='play'){trace();ctx.strokeStyle=cssv('--blue');ctx.globalAlpha=0.3+nearGlow*0.6;ctx.lineWidth=2+nearGlow*4;ctx.shadowColor=cssv('--blue');ctx.shadowBlur=14*nearGlow;ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;}
-    // feine helle Kontur
-    trace();ctx.strokeStyle='rgba(234,226,207,0.16)';ctx.lineWidth=1.4;ctx.stroke();
+    const st=6;ctx.beginPath();
+    for(let x=-10;x<=W+10;x+=st){const d=ember.dist+(x-refX());const e=edges(d);const ye=which<0?e.t:e.b;if(x<=-10)ctx.moveTo(x,ye);else ctx.lineTo(x,ye);}
+    if(nearGlow>0.01&&state==='play'){ctx.strokeStyle=cssv('--blue');ctx.globalAlpha=0.3+nearGlow*0.6;ctx.lineWidth=2+nearGlow*4;ctx.shadowColor=cssv('--blue');ctx.shadowBlur=14*nearGlow;ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;}
+    ctx.strokeStyle='rgba(234,226,207,0.16)';ctx.lineWidth=1.4;ctx.stroke();
   }
 
   function inkTrail(){
@@ -380,7 +347,7 @@ const WALLTEX_SRC="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBA
   $('shareBtn').addEventListener('click',e=>{e.stopPropagation();const m=meters();const txt=mode==='daily'?('FALLING GHOST - Taeglich '+dailyKey+'\nStrecke: '+m+' m\nSchaffst du es weiter?'):('FALLING GHOST - Endlos\nStrecke: '+m+' m');const t=$('toast');if(navigator.share){navigator.share({text:txt}).catch(()=>{});}else if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>{t.textContent='In Zwischenablage kopiert';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1600);});}});
   $('over').addEventListener('pointerdown',e=>{if(e.target.id==='over')start();});
 
-  initSeed();resize();requestAnimationFrame(loop);
+  resize();requestAnimationFrame(loop);
 })();
 </script>
 </body>
