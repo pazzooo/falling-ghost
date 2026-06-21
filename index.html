@@ -203,9 +203,9 @@ const WALLTEX_SRC="walltex.jpg";
   function halfBase(d){let w=CFG.widBase + CFG.widAmp1*Math.sin(d*CFG.widF1+P[3]) + CFG.widAmp2*Math.sin(d*CFG.widF2+P[4]); w=Math.min(CFG.widMax,Math.max(CFG.widMin,w)); return w*H;}
   function bumpTop(d){return (CFG.bumpAmp1*pulse(d*CFG.bumpF1a+P[5]) + CFG.bumpAmp2*pulse(d*CFG.bumpF2a+P[6]))*H;}
   function bumpBot(d){return (CFG.bumpAmp1*pulse(d*CFG.bumpF1b+P[7]) + CFG.bumpAmp2*pulse(d*CFG.bumpF2b+P[8]))*H;}
+  function introK(d){ const introDist=CFG.introMeters*CFG.pxPerMeter; let k=Math.min(1,Math.max(0,d/introDist)); return k*k*(3-2*k); } // smoothstep: 0 am Start -> 1 nach Intro
   function edges(d){
-    const introDist=CFG.introMeters*CFG.pxPerMeter;
-    let k=Math.min(1,Math.max(0,d/introDist)); k=k*k*(3-2*k); // smoothstep: 0 am Start -> 1 nach Intro
+    const k=introK(d);
     const cy=0.5*H*(1-k)+centerLine(d)*k;
     const hb=(CFG.introHalf*H)*(1-k)+halfBase(d)*k;
     let t=cy-hb+bumpTop(d)*k;
@@ -214,7 +214,8 @@ const WALLTEX_SRC="walltex.jpg";
     if(b-t<mc){const m=(t+b)*0.5;t=m-mc*0.5;b=m+mc*0.5;}
     return {t,b};
   }
-  function menuEdges(d){return {t:(0.5-0.38+0.015*Math.sin(d*0.004))*H, b:(0.5+0.38-0.015*Math.sin(d*0.004+1.5))*H};}
+  // Menue-Waende = Spielstart-Waende (gleicher Spalt), damit der Uebergang nicht springt
+  function menuEdges(d){return {t:(0.5-CFG.introHalf+0.012*Math.sin(d*0.004))*H, b:(0.5+CFG.introHalf-0.012*Math.sin(d*0.004+1.5))*H};}
   function biome(d){return 0.5+0.5*Math.sin(d*CFG.biomeFreq);}
 
   function resize(){DPR=Math.min(window.devicePixelRatio||1,2);W=stage.clientWidth;H=stage.clientHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);scale=H/800;}
@@ -338,11 +339,15 @@ const WALLTEX_SRC="walltex.jpg";
   }
 
   function character(){
-    const x=refX(),y=ember.y;
+    // Intro: startet in der Startszenen-Pose (mittig, gross) und gleitet zur Spielposition (refX, normal)
+    const k=introK(ember.dist);
+    const x=W*0.5+(refX()-W*0.5)*k, y=ember.y;
+    const sc=(CFG.heroScale+(1-CFG.heroScale)*k)*scale; // 1.5x -> 1.0x
     if(!charImg.__r){ctx.fillStyle=cssv('--ink');ctx.beginPath();ctx.arc(x,y,9*scale,0,Math.PI*2);ctx.fill();return;}
-    const hgt=CFG.spriteH*scale,wdt=hgt*(charImg.width/charImg.height);
+    const hgt=CFG.spriteH*sc,wdt=hgt*(charImg.width/charImg.height);
     const lean=Math.max(-0.5,Math.min(0.5,ember.vy*CFG.lean))+Math.sin(wob*0.5)*0.02;
     ctx.save();ctx.translate(x,y);ctx.rotate(lean);if(CFG.faceFlip)ctx.scale(-1,1);
+    if(k<1){const a=(1-k)*0.18;const ga=ctx.createRadialGradient(0,0,0,0,0,hgt*0.5);ga.addColorStop(0,'rgba(209,31,56,'+a+')');ga.addColorStop(1,'rgba(209,31,56,0)');ctx.fillStyle=ga;ctx.beginPath();ctx.arc(0,0,hgt*0.5,0,Math.PI*2);ctx.fill();}
     if(nearGlow>0.3){const g=ctx.createRadialGradient(0,0,0,0,0,hgt*0.4);g.addColorStop(0,'rgba(209,31,56,'+(nearGlow*0.4)+')');g.addColorStop(1,'rgba(209,31,56,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,hgt*0.4,0,Math.PI*2);ctx.fill();}
     ctx.drawImage(charImg,-wdt*0.5,-hgt*CFG.headFrac,wdt,hgt);
     ctx.restore();
