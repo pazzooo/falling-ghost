@@ -154,7 +154,8 @@ const WALLTEX_SRC="walltex.jpg";
 const WALLTEX2_SRC="walltex2.png";
 const WALLTEX3_SRC="walltex3.png";
 (() => {
-  const cv=document.getElementById('c'), ctx=cv.getContext('2d'), stage=document.getElementById('stage');
+  const cv=document.getElementById('c'), vctx=cv.getContext('2d'), stage=document.getElementById('stage');
+  const oc=document.createElement('canvas'), ctx=oc.getContext('2d'); // scharf in voller Aufloesung zeichnen, danach pixelig verkleinern
   function L(src){const i=new Image();i.__r=false;i.onload=()=>i.__r=true;i.src=src;return i;}
   const bgImg=L(BG_SRC), charImg=L(CHAR_SRC), wtex=L(WALLTEX_SRC), wtex2=L(WALLTEX2_SRC), wtex3=L(WALLTEX3_SRC);
   let wallPat=null, wallPat2=null, wallPat3=null; const wallTileW=240;
@@ -237,8 +238,15 @@ const WALLTEX3_SRC="walltex3.png";
   function biome(d){return 0.5+0.5*Math.sin(d*CFG.biomeFreq);}
 
   const PIXEL=3; // CSS-Pixel pro gerendertem Pixel (Retro-Koernung)
-  function resize(){W=stage.clientWidth;H=stage.clientHeight;const bw=Math.max(1,Math.round(W/PIXEL)),bh=Math.max(1,Math.round(H/PIXEL));cv.width=bw;cv.height=bh;ctx.setTransform(bw/W,0,0,bh/H,0,0);ctx.imageSmoothingEnabled=false;scale=H/800;}
-  function snapPx(v){ const s=W/cv.width; return Math.round(v/s)*s; } // logischen Wert aufs Backing-Pixelraster runden
+  function resize(){
+    W=stage.clientWidth;H=stage.clientHeight;
+    oc.width=W;oc.height=H;                                   // Zeichenflaeche scharf (1:1)
+    cv.width=Math.max(1,Math.round(W/PIXEL));cv.height=Math.max(1,Math.round(H/PIXEL)); // sichtbar pixelig
+    ctx.setTransform(1,0,0,1,0,0);ctx.imageSmoothingEnabled=true;
+    scale=H/800;
+  }
+  // scharfes Bild gemittelt auf Pixelgroesse verkleinern -> sauberer Pixel-Look statt Rauschen
+  function present(){ vctx.imageSmoothingEnabled=true; vctx.clearRect(0,0,cv.width,cv.height); vctx.drawImage(oc,0,0,W,H,0,0,cv.width,cv.height); quantize16(); }
   window.addEventListener('resize', resize);
 
   function press(){SND.init();SND.resume();if(state==='play'){ember.held=true;SND.thrust(true);}else start();}
@@ -304,7 +312,7 @@ const WALLTEX3_SRC="walltex3.png";
     if(hitStop>0){ctx.save();bg();tunnel();inkTrail();character();ctx.restore();blot();return;}
     let sx=0,sy=0;if(shake>0){sx=(Math.random()-0.5)*shake;sy=(Math.random()-0.5)*shake;shake*=0.86;if(shake<0.4)shake=0;}
     const tcy=Math.max(-H*0.12,Math.min(H*0.12,-ember.vy*CFG.camLead));camY+=(tcy-camY)*0.1;
-    ctx.save();ctx.translate(snapPx(sx),snapPx(sy+camY)); // aufs Pixelraster einrasten -> kein Flimmern
+    ctx.save();ctx.translate(sx,sy+camY);
     bg();
     if(state==='menu'){ menuFrames(); heroGhost(); }
     else { tunnel();inkTrail();if(state==='play')character();parts(); }
@@ -333,7 +341,7 @@ const WALLTEX3_SRC="walltex3.png";
     pathFn();
     ctx.fillStyle='#0d0d12'; ctx.fill();
     ctx.clip();
-    if(wallPat){ const off=snapPx(worldScroll()%wallTileW); ctx.save(); ctx.translate(-off,0);
+    if(wallPat){ const off=worldScroll()%wallTileW; ctx.save(); ctx.translate(-off,0);
       ctx.fillStyle=wallPat; ctx.fillRect(-wallTileW,-40,W+wallTileW*2,H+80);
       const bf2=wallFade(600,40);   // ab 600m: blaue Wirbel-Textur
       if(bf2>0&&wallPat2){ ctx.globalAlpha=bf2; ctx.fillStyle=wallPat2; ctx.fillRect(-wallTileW,-40,W+wallTileW*2,H+80); ctx.globalAlpha=1; }
@@ -406,18 +414,18 @@ const WALLTEX3_SRC="walltex3.png";
   // 16-Bit-Look: Farbtiefe pro Frame auf RGB565 reduzieren (5-6-5 Bit)
   function quantize16(){
     try{
-      const id=ctx.getImageData(0,0,cv.width,cv.height),d=id.data;
+      const id=vctx.getImageData(0,0,cv.width,cv.height),d=id.data;
       for(let i=0;i<d.length;i+=4){ d[i]&=0xF8; d[i+1]&=0xFC; d[i+2]&=0xF8; }
-      ctx.putImageData(id,0,0);
+      vctx.putImageData(id,0,0);
     }catch(e){ /* getImageData kann bei file:// gesperrt sein -> Look bleibt 24-Bit */ }
   }
   function loop(now){
     let dt=now-last;last=now;if(dt>250)dt=250;
     if(state==='menu')menuScroll+=0.7;
-    if(hitStop>0){hitStop-=dt;if(hitStop<0)hitStop=0;draw();quantize16();requestAnimationFrame(loop);return;}
+    if(hitStop>0){hitStop-=dt;if(hitStop<0)hitStop=0;draw();present();requestAnimationFrame(loop);return;}
     acc+=dt*timeScale;
     while(acc>=STEP){step();acc-=STEP;if(state!=='play')break;}
-    draw();quantize16();requestAnimationFrame(loop);
+    draw();present();requestAnimationFrame(loop);
   }
 
   $('start').addEventListener('pointerdown',e=>{SND.init();SND.resume();start();ember.held=true;SND.thrust(true);});
