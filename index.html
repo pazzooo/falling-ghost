@@ -402,13 +402,21 @@ const WALLTEX3_SRC="walltex3.png";
   const cc={};function cssv(v){if(!cc[v])cc[v]=getComputedStyle(document.documentElement).getPropertyValue(v).trim();return cc[v];}
 
   let last=performance.now(),acc=0;const STEP=1000/60;
+  // 16-Bit-Look: Farbtiefe pro Frame auf RGB565 reduzieren (5-6-5 Bit)
+  function quantize16(){
+    try{
+      const id=ctx.getImageData(0,0,cv.width,cv.height),d=id.data;
+      for(let i=0;i<d.length;i+=4){ d[i]&=0xF8; d[i+1]&=0xFC; d[i+2]&=0xF8; }
+      ctx.putImageData(id,0,0);
+    }catch(e){ /* getImageData kann bei file:// gesperrt sein -> Look bleibt 24-Bit */ }
+  }
   function loop(now){
     let dt=now-last;last=now;if(dt>250)dt=250;
     if(state==='menu')menuScroll+=0.7;
-    if(hitStop>0){hitStop-=dt;if(hitStop<0)hitStop=0;draw();requestAnimationFrame(loop);return;}
+    if(hitStop>0){hitStop-=dt;if(hitStop<0)hitStop=0;draw();quantize16();requestAnimationFrame(loop);return;}
     acc+=dt*timeScale;
     while(acc>=STEP){step();acc-=STEP;if(state!=='play')break;}
-    draw();requestAnimationFrame(loop);
+    draw();quantize16();requestAnimationFrame(loop);
   }
 
   $('start').addEventListener('pointerdown',e=>{SND.init();SND.resume();start();ember.held=true;SND.thrust(true);});
