@@ -22,7 +22,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
   :root { --canvas:#eae2cf; --canvas-2:#ded4bd; --ink:#1c1714; --ink-soft:#3a322c; --ink-dim:#8a7f70; --blue:#2a9fe6; --red:#d11f38; --pix:'Press Start 2P','Courier New',monospace; }
-  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none; -webkit-user-drag:none; }
   html,body { height:100%; background:var(--canvas); overflow:hidden; }
   body { display:flex; flex-direction:column; align-items:stretch; font-family:var(--pix); color:var(--ink); touch-action:none; user-select:none; }
   /* Werbebanner oben/unten: reservierter, sichtbarer Platz (zaehlt als Impression/CPM) */
@@ -261,6 +261,10 @@ const WALLTEX3_SRC="walltex3.png";
   window.addEventListener('pointerup',release);
   window.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();press();}});
   window.addEventListener('keyup',e=>{if(e.code==='Space')release();});
+  // Langdruck-Kontextmenue / Auswahl / Drag unterbinden (Webseite soll sich wie eine App anfuehlen)
+  window.addEventListener('contextmenu',e=>e.preventDefault());
+  window.addEventListener('selectstart',e=>e.preventDefault());
+  window.addEventListener('dragstart',e=>e.preventDefault());
 
   const $=id=>document.getElementById(id);
   function start(){
