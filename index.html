@@ -156,6 +156,7 @@ const WALLTEX3_SRC="walltex3.png";
 (() => {
   const cv=document.getElementById('c'), vctx=cv.getContext('2d'), stage=document.getElementById('stage');
   const oc=document.createElement('canvas'), ctx=oc.getContext('2d'); // scharf in voller Aufloesung zeichnen, danach pixelig verkleinern
+  const mid=document.createElement('canvas'), mctx=mid.getContext('2d'); // Zwischenstufe fuer saubere (gemittelte) Verkleinerung
   function L(src){const i=new Image();i.__r=false;i.onload=()=>i.__r=true;i.src=src;return i;}
   const bgImg=L(BG_SRC), charImg=L(CHAR_SRC), wtex=L(WALLTEX_SRC), wtex2=L(WALLTEX2_SRC), wtex3=L(WALLTEX3_SRC);
   let wallPat=null, wallPat2=null, wallPat3=null; const wallTileW=240;
@@ -241,12 +242,21 @@ const WALLTEX3_SRC="walltex3.png";
   function resize(){
     W=stage.clientWidth;H=stage.clientHeight;
     oc.width=W;oc.height=H;                                   // Zeichenflaeche scharf (1:1)
+    mid.width=Math.max(1,Math.round(W/2));mid.height=Math.max(1,Math.round(H/2)); // Zwischenstufe (halbe Groesse)
     cv.width=Math.max(1,Math.round(W/PIXEL));cv.height=Math.max(1,Math.round(H/PIXEL)); // sichtbar pixelig
-    ctx.setTransform(1,0,0,1,0,0);ctx.imageSmoothingEnabled=true;
+    ctx.setTransform(1,0,0,1,0,0);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    mctx.imageSmoothingEnabled=true;mctx.imageSmoothingQuality='high';
+    vctx.imageSmoothingEnabled=true;vctx.imageSmoothingQuality='high';
     scale=H/800;
   }
-  // scharfes Bild gemittelt auf Pixelgroesse verkleinern -> sauberer Pixel-Look statt Rauschen
-  function present(){ vctx.imageSmoothingEnabled=true; vctx.clearRect(0,0,cv.width,cv.height); vctx.drawImage(oc,0,0,W,H,0,0,cv.width,cv.height); quantize16(); }
+  // scharfes Bild in zwei Stufen gemittelt verkleinern -> sauberer Pixel-Look statt Rauschen
+  function present(){
+    mctx.clearRect(0,0,mid.width,mid.height);
+    mctx.drawImage(oc,0,0,W,H,0,0,mid.width,mid.height);                 // Stufe 1: auf halbe Groesse (mitteln)
+    vctx.clearRect(0,0,cv.width,cv.height);
+    vctx.drawImage(mid,0,0,mid.width,mid.height,0,0,cv.width,cv.height); // Stufe 2: auf Pixelgroesse (mitteln)
+    quantize16();
+  }
   window.addEventListener('resize', resize);
 
   function press(){SND.init();SND.resume();if(state==='play'){ember.held=true;SND.thrust(true);}else start();}
