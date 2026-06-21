@@ -258,6 +258,10 @@ const WALLTEX3_SRC="walltex3.png";
   function press(){SND.init();SND.resume();if(state==='play'){ember.held=true;SND.thrust(true);}else start();}
   function release(){ember.held=false;SND.thrust(false);}
   cv.addEventListener('pointerdown',e=>{e.preventDefault();press();});
+  // iOS-Lupe/Selektion unterbinden: Touch-Geste auf dem Spielfeld abfangen (Pointer-Input bleibt aktiv)
+  cv.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
+  cv.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+  cv.addEventListener('touchend',e=>e.preventDefault(),{passive:false});
   window.addEventListener('pointerup',release);
   window.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();press();}});
   window.addEventListener('keyup',e=>{if(e.code==='Space')release();});
