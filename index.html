@@ -24,7 +24,21 @@
   :root { --canvas:#eae2cf; --canvas-2:#ded4bd; --ink:#1c1714; --ink-soft:#3a322c; --ink-dim:#8a7f70; --blue:#2a9fe6; --red:#d11f38; }
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { height:100%; background:var(--canvas); overflow:hidden; }
-  body { display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; color:var(--ink); touch-action:none; user-select:none; }
+  body { display:flex; flex-direction:column; align-items:stretch; font-family:'Fraunces',serif; color:var(--ink); touch-action:none; user-select:none; }
+  /* Werbebanner oben/unten: reservierter, sichtbarer Platz (zaehlt als Impression/CPM) */
+  .adbar { flex:0 0 auto; display:flex; align-items:center; justify-content:center; width:100%;
+           min-height:56px; background:var(--canvas-2); position:relative; z-index:6; overflow:hidden; }
+  #adTop { border-bottom:1px solid rgba(28,23,20,.18); padding-top:env(safe-area-inset-top,0px); }
+  #adBottom { border-top:1px solid rgba(28,23,20,.18); padding-bottom:env(safe-area-inset-bottom,0px); }
+  .adbar .ad-slot { display:flex; align-items:center; justify-content:center; width:100%; max-width:728px;
+                    min-height:50px; color:var(--ink-dim); font-family:'Cormorant Garamond',serif;
+                    letter-spacing:.18em; text-transform:uppercase; font-size:12px; }
+  /* Platzhalter-Optik (verschwindet, sobald echtes Ad-Snippet eingesetzt ist) */
+  .ad-slot.placeholder { border:1px dashed rgba(28,23,20,.28); border-radius:2px; }
+  .adbar .ad-label { position:absolute; top:2px; left:8px; font-family:'Cormorant Garamond',serif;
+                     font-size:9px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-dim); opacity:.7; }
+  @media (min-width:760px){ .adbar { min-height:96px; } .adbar .ad-slot { min-height:90px; } }
+  #play { flex:1 1 auto; display:flex; align-items:center; justify-content:center; min-height:0; }
   #stage { position:relative; width:100%; height:100%; max-width:520px; }
   canvas { display:block; width:100%; height:100%; background:var(--canvas); }
   .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:32px; gap:18px; transition:opacity .25s ease; }
@@ -62,6 +76,24 @@
 </style>
 </head>
 <body>
+
+<!-- ============================ WERBUNG OBEN ============================
+     Platzhalter-Banner. Verdient (CPM) sobald er sichtbar angezeigt wird.
+     ECHTE WERBUNG EINBAUEN (z. B. Google AdSense):
+       1) Im <head> einmalig laden:
+          <script async crossorigin="anonymous"
+            src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX"></script>
+       2) Diesen Platzhalter-Inhalt durch das Slot-Snippet ersetzen:
+          <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+               data-ad-slot="OBEN_SLOT_ID" data-ad-format="auto" data-full-width-responsive="true"></ins>
+       3) initAds() pusht den Slot automatisch (siehe Skript unten).
+     Regeln: kein Auto-Refresh, keine Anreiz-Klicks, Banner sichtbar lassen. -->
+<div id="adTop" class="adbar">
+  <span class="ad-label">Werbung</span>
+  <div class="ad-slot placeholder" id="adSlotTop" data-ad="top">Werbeplatz &middot; 320&times;50 / 728&times;90</div>
+</div>
+
+<main id="play">
 <div id="stage">
   <canvas id="c"></canvas>
   <button id="mute">Klang an</button>
@@ -90,6 +122,14 @@
     </div>
     <div class="hint" id="ovHint">Tippen fuer sofortigen Neustart</div>
   </div>
+</div>
+</main>
+
+<!-- ============================ WERBUNG UNTEN ============================
+     Identisch zum oberen Banner. Slot-ID hier: UNTEN_SLOT_ID. -->
+<div id="adBottom" class="adbar">
+  <span class="ad-label">Werbung</span>
+  <div class="ad-slot placeholder" id="adSlotBottom" data-ad="bottom">Werbeplatz &middot; 320&times;50 / 728&times;90</div>
 </div>
 
 <script>
@@ -347,7 +387,18 @@ const WALLTEX_SRC="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBA
   $('shareBtn').addEventListener('click',e=>{e.stopPropagation();const m=meters();const txt=mode==='daily'?('FALLING GHOST - Taeglich '+dailyKey+'\nStrecke: '+m+' m\nSchaffst du es weiter?'):('FALLING GHOST - Endlos\nStrecke: '+m+' m');const t=$('toast');if(navigator.share){navigator.share({text:txt}).catch(()=>{});}else if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>{t.textContent='In Zwischenablage kopiert';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1600);});}});
   $('over').addEventListener('pointerdown',e=>{if(e.target.id==='over')start();});
 
-  resize();requestAnimationFrame(loop);
+  // --- Werbung: Platzhalter-Hook. Aktiviert vorhandene Ad-Slots.
+  //     Solange nur Platzhalter da sind, passiert nichts (Spiel laeuft normal).
+  //     Mit echtem AdSense-Snippet verdienen die Banner per Impression (CPM). ---
+  function initAds(){
+    try{
+      const ins=document.querySelectorAll('ins.adsbygoogle');
+      ins.forEach(()=>{ (window.adsbygoogle=window.adsbygoogle||[]).push({}); });
+    }catch(e){ /* Werbung ist optional - Spiel laeuft auch ohne */ }
+    resize(); // Layout nach evtl. Banner-Hoehenaenderung neu berechnen
+  }
+
+  resize();initAds();requestAnimationFrame(loop);
 })();
 </script>
 </body>
