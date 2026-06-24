@@ -164,16 +164,15 @@ const WALLTEX3_SRC="walltex3.png";
   const CFG = {
     gravityY:0.82, thrustY:0.74, drag:0.852, maxVY:8.6,
     baseSpeed:4.2, speedGain:0.00024, maxSpeed:9.0,
-    diffRampM:1500, diffShrink:0.22, diffFloorHalf:0.14,
+    diffRampM:1500, diffShrink:0.5, diffFloorHalf:0.09,
     refXFrac:0.34, faceFlip:false,
     emberR:9, hitboxMul:0.66, nearMiss:22, pxPerMeter:18,
     minClear:0.125, introMeters:20, introHalf:0.30,
     elevAmp1:0.16, elevF1:0.0011, elevAmp2:0.08, elevF2:0.0031, elevAmp3:0.04, elevF3:0.0078,
     widBase:0.15, widAmp1:0.115, widF1:0.0020, widAmp2:0.06, widF2:0.0049, widMin:0.10, widMax:0.25,
     bumpAmp1:0.03, bumpF1a:0.015, bumpF1b:0.013, bumpAmp2:0.015, bumpF2a:0.031, bumpF2b:0.026, bumpThresh:0.42,
-    // organische Waende mit blauen Tropf-Eiszapfen: dichte duenne Tropfen + feine Kante + lange Tropfen
-    warpF:0.0016, warpAmp:90, fineF:0.045, fineAmp:0.010, dripMaskF:0.0012, dripMaskTh:0.5, dripF:0.02, dripAmp:0.04, dripSharp:3.0,
-    spikeF:0.09, spikeSharp:2.5, spikeAmp:0.10, dripVarF:0.01,
+    // organische Waende (mittel): Domain-Warping + feine Kante + Tropfen
+    warpF:0.0016, warpAmp:90, fineF:0.045, fineAmp:0.02, dripMaskF:0.0012, dripMaskTh:0.5, dripF:0.02, dripAmp:0.05, dripSharp:3.0,
     camLead:1.7, slowmoFloor:0.72, hitStopMs:80, milestone:50,
     bgParallax:0.28, biomeFreq:0.0006, trailMax:48,
     spriteH:39, headFrac:0.34, diveK:1.05, upScale:0.6, leanEase:0.10, heroScale:1.5,
@@ -225,15 +224,13 @@ const WALLTEX3_SRC="walltex3.png";
   function vnoise(x){const i=Math.floor(x),f=x-i,u=f*f*(3-2*f),a=hashN(i),b=hashN(i+1);return a+(b-a)*u;}
   function fbm(x){let a=0,amp=0.5,fr=1,n=0;for(let o=0;o<4;o++){a+=amp*vnoise(x*fr);n+=amp;amp*=0.5;fr*=2.017;}return a/n;}
   function ridged(x){return 1-Math.abs(2*vnoise(x)-1);}
-  function surfFine(d,side){ const ph=side<0?0:140.0; return (fbm(d*CFG.fineF+ph)-0.5)*2*CFG.fineAmp*H; } // feine Welligkeit der Wandkante
-  // blaue Tropf-Eiszapfen: dichte duenne Tropfen variabler Laenge + gelegentliche lange Tropfen (in den Spalt)
-  function surfDrip(d,side){
+  // feine zerfranste Kante + gelegentliche Tropfen-Zungen in den Spalt (side:-1 oben,+1 unten)
+  function surf(d,side){
     const ph=side<0?0:140.0;
-    const lenmod=0.5+0.5*fbm(d*CFG.dripVarF+ph);
-    const spike=Math.pow(ridged(d*CFG.spikeF+ph*1.7),CFG.spikeSharp)*lenmod*CFG.spikeAmp*H;
+    const fine=(fbm(d*CFG.fineF+ph)-0.5)*2*CFG.fineAmp*H;
     const mask=Math.max(0,fbm(d*CFG.dripMaskF+ph*0.5)-CFG.dripMaskTh)/(1-CFG.dripMaskTh);
     const drip=Math.pow(ridged(d*CFG.dripF+ph*2),CFG.dripSharp)*mask*CFG.dripAmp*H;
-    return spike+drip;
+    return fine+drip;
   }
   function pulse(x){const s=Math.sin(x);return Math.max(0,s-CFG.bumpThresh)/(1-CFG.bumpThresh);}
   function centerLine(d){return (0.5 + CFG.elevAmp1*Math.sin(d*CFG.elevF1+P[0]) + CFG.elevAmp2*Math.sin(d*CFG.elevF2+P[1]) + CFG.elevAmp3*Math.sin(d*CFG.elevF3+P[2]))*H;}
@@ -248,13 +245,11 @@ const WALLTEX3_SRC="walltex3.png";
     const cy=0.5*H*(1-k)+centerLine(dw)*k;
     const hbS=Math.max(CFG.diffFloorHalf*H, halfBase(dw)*(1-CFG.diffShrink*diffF(d))); // Spalt verengt sich mit der Distanz (mit Boden)
     const hb=(CFG.introHalf*H)*(1-k)+hbS*k;
-    const tb=cy-hb+(bumpTop(dw)+surfFine(d,-1))*k;   // Basis-Kante (Wandkoerper, ohne Tropfen)
-    const bb=cy+hb-(bumpBot(dw)+surfFine(d, 1))*k;
-    let t=tb+surfDrip(d,-1)*k;                        // Voll-Kante inkl. Tropfen (Kollision + dunkle Fuellung)
-    let b=bb-surfDrip(d, 1)*k;
+    let t=cy-hb+(bumpTop(dw)+surf(d,-1))*k;
+    let b=cy+hb-(bumpBot(dw)+surf(d, 1))*k;
     const mc=CFG.minClear*H;
     if(b-t<mc){const m=(t+b)*0.5;t=m-mc*0.5;b=m+mc*0.5;}
-    return {t,b,tb,bb};
+    return {t,b};
   }
   // Menue-Waende = Spielstart-Waende (gleicher Spalt), damit der Uebergang nicht springt
   function menuEdges(d){return {t:(0.5-CFG.introHalf+0.012*Math.sin(d*0.004))*H, b:(0.5+CFG.introHalf-0.012*Math.sin(d*0.004+1.5))*H};}
@@ -374,21 +369,10 @@ const WALLTEX3_SRC="walltex3.png";
     ctx.restore();
   }
   function tunnel(){
-    const st=3;
+    const st=4;
     fillInk(()=>{ctx.beginPath();ctx.moveTo(-40,-40);ctx.lineTo(W+40,-40);for(let x=W+10;x>=-10;x-=st){const d=ember.dist+(x-refX());ctx.lineTo(x,edges(d).t);}ctx.closePath();}, 8*scale);
     fillInk(()=>{ctx.beginPath();ctx.moveTo(-40,H+40);ctx.lineTo(W+40,H+40);for(let x=W+10;x>=-10;x-=st){const d=ember.dist+(x-refX());ctx.lineTo(x,edges(d).b);}ctx.closePath();}, -8*scale);
-    dripFill(-1);dripFill(1);
     edge(-1);edge(1);
-  }
-  // blaue Tropf-Eiszapfen: fuellt die Zone zwischen Basis-Kante und Voll-Kante
-  function dripFill(side){
-    const st=3,rx=refX(),pts=[];
-    for(let x=-12;x<=W+12;x+=st){const d=ember.dist+(x-rx);const e=edges(d);pts.push([x, side<0?e.tb:e.bb, side<0?e.t:e.b]);}
-    ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
-    for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
-    for(let i=pts.length-1;i>=0;i--)ctx.lineTo(pts[i][0],pts[i][2]);
-    ctx.closePath();
-    ctx.save();ctx.fillStyle='rgba(45,115,235,0.92)';ctx.shadowColor='rgba(70,150,255,0.5)';ctx.shadowBlur=5*scale;ctx.fill();ctx.restore();
   }
   function menuFrames(){
     const st=8;
@@ -396,7 +380,7 @@ const WALLTEX3_SRC="walltex3.png";
     fillInk(()=>{ctx.beginPath();ctx.moveTo(-40,H+40);ctx.lineTo(W+40,H+40);for(let x=W+10;x>=-10;x-=st){const d=menuScroll+(x-refX());ctx.lineTo(x,menuEdges(d).b);}ctx.closePath();}, -8*scale);
   }
   function edge(which){
-    const st=3;ctx.beginPath();
+    const st=4;ctx.beginPath();
     for(let x=-10;x<=W+10;x+=st){const d=ember.dist+(x-refX());const e=edges(d);const ye=which<0?e.t:e.b;if(x<=-10)ctx.moveTo(x,ye);else ctx.lineTo(x,ye);}
     if(nearGlow>0.01&&state==='play'){ctx.strokeStyle=cssv('--blue');ctx.globalAlpha=0.3+nearGlow*0.6;ctx.lineWidth=2+nearGlow*4;ctx.shadowColor=cssv('--blue');ctx.shadowBlur=14*nearGlow;ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;}
     ctx.strokeStyle='rgba(234,226,207,0.16)';ctx.lineWidth=1.4;ctx.stroke();
