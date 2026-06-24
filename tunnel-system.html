@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Falling Ghost – Tinten-Tunnel</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+  html,body{height:100%;background:#05070c;overflow:hidden;touch-action:none;}
+  canvas{display:block;width:100%;height:100%;}
+  #hint{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);font:13px/1.4 system-ui,sans-serif;color:#7da0c8;opacity:.8;pointer-events:none;text-align:center}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">Halten = steigen · loslassen = fallen</div>
+<script>
+(() => {
+'use strict';
+
+/* ============================================================
+   1) NOISE  –  1D Perlin (improved) + fBm (mehrere Ebenen)
+   ============================================================ */
+function makePerlin(seed){
+  const perm = new Uint8Array(512);
+  const tmp  = new Uint8Array(256);
+  for(let i=0;i<256;i++) tmp[i]=i;
+  let s = (seed>>>0) || 1;
+  const rnd = ()=>{ s = (s*1664525 + 1013904223) >>> 0; return s/4294967296; };
+  for(let i=255;i>0;i--){ const j=(rnd()*(i+1))|0; const t=tmp[i]; tmp[i]=tmp[j]; tmp[j]=t; }
+  for(let i=0;i<512;i++) perm[i]=tmp[i&255];
+  const fade = t => t*t*t*(t*(t*6-15)+10);
+  const lerp = (a,b,t) => a + t*(b-a);
+  const grad = (h,x) => (h&1) ? -x : x;            // 1D Gradient ±1
+  // gibt Werte ~[-1,1] zurück
+  return function(x){
+    const xi = Math.floor(x);
+    const X = xi & 255;
+    const xf = x - xi;
+    const u = fade(xf);
+    return lerp(grad(perm[X], xf), grad(perm[X+1], xf-1), u);
+  };
+}
+// fraktales Brownsches Rauschen: mehrere Oktaven kombiniert -> organisch
+function fbm(noise, x, oct, lac, gain){
+  let freq=1, amp=1, sum=0, norm=0;
+  for(let i=0;i<oct;i++){ sum += amp*noise(x*freq); norm += amp; freq*=lac; amp*=gain; }
+  return sum/norm;                                  // ~[-1,1]
+}
+
+// eigene Noise-Instanzen pro Ebene (verschiedene Seeds = unabhängige Variation)
+const nCenter = makePerlin(1337);   // große Höhlen-Mittellinie
+const nGap    = makePerlin(7777);   // Tunnelbreite
+const nTop    = makePerlin(2024);   // Ausbuchtungen obere Wand
+const nBot    = makePerlin(9091);   // Ausbuchtungen untere Wand
+const nWarp   = makePerlin(5150);   // Domain-Warping (lässt Kurven fließen)
+
+/* ============================================================
+   2) CANVAS / SETUP
+   ============================================================ */
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W=0, H=0, DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);     // Mobile: DPR auf 2 deckeln
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = (W*DPR)|0; cv.height = (H*DPR)|0;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize, {passive:true});
+resize();
+
+/* ============================================================
+   3) TUNNEL-MODELL  –  endlos, prozedural, Punkt-Recycling
+   ============================================================
+   Wir halten eine sortierte Liste von Stützpunkten (Spalten).
+   Jeder Punkt kennt seine WELT-x (wx). Beim Scrollen werden links
+   herausgelaufene Punkte recycelt und rechts neue erzeugt.        */
+const CFG = {
+  scrollSpeed: 150,     // px pro Sekunde (konstant)
+  spacing:     14,      // Welt-Abstand zwischen Stützpunkten (klein=glatter, groß=schneller)
+  margin:      40,      // Überstand links/rechts außerhalb des Bildschirms
+
+  centerFreq:  0.0016,  centerAmp: 0.17,   // große Mittellinien-Bewegung (Anteil von H)
+  gapBase:     0.34,    gapVar:    0.10,    // Grund-Tunnelhöhe + Variation (Anteil von H)
+  gapMin:      0.16,                        // niemals enger (Anteil von H) -> immer passierbar
+
+  // Ausbuchtungen je Wand (mehrere Ebenen, nach innen in den Spalt)
+  bumpLargeF:0.0040, bumpLargeA:0.16,
+  bumpMedF:  0.0110, bumpMedA:  0.075,
+  bumpSmallF:0.0300, bumpSmallA:0.025,
+
+  warpF: 0.0020, warpAmp: 90,               // Domain-Warping-Stärke (Welt-px)
+  pulseSpeed: 1.4, pulseAmp: 0.012,         // lebendiges Pulsieren (Anteil von H)
+};
+
+// Objekt-Pool, damit pro Frame kein Garbage erzeugt wird
+const pool = [];
+function takeNode(){ return pool.pop() || {wx:0, cy:0, half:0}; }
+function freeNode(n){ pool.push(n); }
+
+let cols = [];            // aktive Stützpunkte (aufsteigend nach wx)
+let scrollX = 0;          // zurückgelegte Welt-Distanz
+
+// erzeugt die rohe Tunnelgeometrie an Welt-x (zeitunabhängig, deterministisch)
+function sampleColumn(wx, node){
+  // Domain-Warping: x leicht "verziehen" -> fließende, nicht-periodische Kurven
+  const wd = wx + fbm(nWarp, wx*CFG.warpF, 2, 2.0, 0.5) * CFG.warpAmp;
+
+  // große Höhlen-Mittellinie
+  const cy = H*0.5 + fbm(nCenter, wd*CFG.centerFreq, 3, 2.0, 0.5) * (CFG.centerAmp*H);
+
+  // dynamische halbe Tunnelhöhe
+  let half = (CFG.gapBase + fbm(nGap, wd*0.0022 + 11.3, 2, 2.0, 0.5) * CFG.gapVar) * H * 0.5;
+
+  node.wx = wx; node.cy = cy; node.half = half;
+  return node;
+}
+
+// Ausbuchtung (nach innen, >=0) für eine Wand – wie im Beispiel: large*.. + medium*.. + small*..
+function bump(noise, wx){
+  const large = (fbm(noise, wx*CFG.bumpLargeF,        2,2,0.5)*0.5+0.5) * CFG.bumpLargeA;
+  const med   = (fbm(noise, wx*CFG.bumpMedF + 50,     2,2,0.5)*0.5+0.5) * CFG.bumpMedA;
+  const small = (fbm(noise, wx*CFG.bumpSmallF + 99,    2,2,0.5)*0.5+0.5) * CFG.bumpSmallA;
+  return (large + med + small) * H;      // px, immer >=0 (ragt in den Spalt)
+}
+
+// liefert {top, bottom} an Welt-x inkl. Pulsieren – garantiert passierbar
+function edgesAt(wx, t){
+  const tmp = takeNode();
+  sampleColumn(wx, tmp);
+  const cy = tmp.cy, half = tmp.half;
+  freeNode(tmp);
+
+  const pulse = Math.sin(t*CFG.pulseSpeed + wx*0.012) * (CFG.pulseAmp*H);
+
+  let top    = cy - half + bump(nTop, wx) + pulse;
+  let bottom = cy + half - bump(nBot, wx) + pulse;
+
+  // niemals unpassierbar: Mindestspalt erzwingen
+  const minGap = CFG.gapMin * H;
+  if (bottom - top < minGap){ const m=(top+bottom)*0.5; top=m-minGap*0.5; bottom=m+minGap*0.5; }
+  return {top, bottom};
+}
+
+// füllt cols so, dass der gesamte Bildschirm + Rand abgedeckt ist
+function refillColumns(){
+  const leftWX  = scrollX - CFG.margin;
+  const rightWX = scrollX + W + CFG.margin;
+
+  // links Herausgelaufene recyceln
+  while (cols.length && cols[0].wx < leftWX - CFG.spacing){ freeNode(cols.shift()); }
+
+  // Start, falls leer
+  if (!cols.length){
+    const startWX = Math.floor(leftWX / CFG.spacing) * CFG.spacing;
+    cols.push(sampleColumn(startWX, takeNode()));
+  }
+  // rechts neue erzeugen
+  let lastWX = cols[cols.length-1].wx;
+  while (lastWX < rightWX){
+    lastWX += CFG.spacing;
+    cols.push(sampleColumn(lastWX, takeNode()));
+  }
+  // vorne auffüllen, falls nötig (z.B. nach Resize)
+  let firstWX = cols[0].wx;
+  while (firstWX > leftWX){
+    firstWX -= CFG.spacing;
+    cols.unshift(sampleColumn(firstWX, takeNode()));
+  }
+}
+
+/* ============================================================
+   4) SPIELER + KOLLISIONSFORM (Kreis gegen Tunnelgrenzen)
+   ============================================================ */
+const player = { xFrac:0.30, y:0, vy:0, r:11, alive:true, flash:0 };
+let held=false;
+function resetPlayer(){ player.y=H*0.5; player.vy=0; player.alive=true; }
+resetPlayer();
+
+function playerWorldX(){ return scrollX + W*player.xFrac; }
+
+// Tunnelgrenzen an der Spielerposition (interpoliert zwischen Stützpunkten)
+let curTime=0;
+function tunnelAtPlayer(){
+  const wx = playerWorldX();
+  return edgesAt(wx, curTime);     // direkte Auswertung = exakt
+}
+function collides(){
+  const e = tunnelAtPlayer();
+  return (player.y - player.r < e.top) || (player.y + player.r > e.bottom);
+}
+
+window.addEventListener('pointerdown', e=>{ e.preventDefault(); held=true; }, {passive:false});
+window.addEventListener('pointerup',   ()=>{ held=false; });
+window.addEventListener('keydown', e=>{ if(e.code==='Space') held=true; });
+window.addEventListener('keyup',   e=>{ if(e.code==='Space') held=false; });
+
+/* ============================================================
+   5) UPDATE
+   ============================================================ */
+function update(dt){
+  curTime += dt;
+  scrollX += CFG.scrollSpeed * dt;        // endlos nach links scrollen
+  refillColumns();
+
+  // einfache Schwebephysik (nur zur Demonstration der Kollision)
+  const g = 1400, thrust = 2600;
+  player.vy += (held ? -thrust : g) * dt;
+  player.vy *= 0.92;
+  player.y  += player.vy * dt;
+
+  if (player.alive && collides()){
+    player.alive=false; player.flash=1;
+    setTimeout(resetPlayer, 350);
+  }
+  if (player.flash>0) player.flash = Math.max(0, player.flash - dt*3);
+}
+
+/* ============================================================
+   6) RENDERING  –  organische schwarze Tinte + blaue Innenkante
+   ============================================================ */
+// glatte Kurve durch die Stützpunkte (Midpoint-Quadratics)
+function traceEdge(getY){
+  const n = cols.length;
+  let px = cols[0].wx - scrollX, py = getY(cols[0]);
+  ctx.lineTo(px, py);
+  for (let i=1;i<n-1;i++){
+    const x0 = cols[i].wx - scrollX, y0 = getY(cols[i]);
+    const x1 = cols[i+1].wx - scrollX, y1 = getY(cols[i+1]);
+    ctx.quadraticCurveTo(x0, y0, (x0+x1)*0.5, (y0+y1)*0.5);
+  }
+  const last = cols[n-1];
+  ctx.lineTo(last.wx - scrollX, getY(last));
+}
+
+// y-Funktionen inkl. Bumps + Pulsieren (rendern = exakt wie Kollision)
+function topY(c){
+  const wx=c.wx, pulse=Math.sin(curTime*CFG.pulseSpeed + wx*0.012)*(CFG.pulseAmp*H);
+  let top=c.cy-c.half+bump(nTop,wx)+pulse, bottom=c.cy+c.half-bump(nBot,wx)+pulse;
+  const mg=CFG.gapMin*H; if(bottom-top<mg){const m=(top+bottom)*0.5; top=m-mg*0.5;} return top;
+}
+function botY(c){
+  const wx=c.wx, pulse=Math.sin(curTime*CFG.pulseSpeed + wx*0.012)*(CFG.pulseAmp*H);
+  let top=c.cy-c.half+bump(nTop,wx)+pulse, bottom=c.cy+c.half-bump(nBot,wx)+pulse;
+  const mg=CFG.gapMin*H; if(bottom-top<mg){const m=(top+bottom)*0.5; bottom=m+mg*0.5;} return bottom;
+}
+
+function draw(){
+  // Hintergrund (Tunnel-Inneres) – dunkler Verlauf
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0a0f1a'); bg.addColorStop(0.5,'#0e1422'); bg.addColorStop(1,'#0a0f1a');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+  const over = 60; // Überstand, damit Füllung Ränder sicher abdeckt
+
+  // --- obere Wand: schwarze Tinte ---
+  ctx.beginPath();
+  ctx.moveTo(-CFG.margin, -over);
+  traceEdge(topY);
+  ctx.lineTo(W+CFG.margin, -over);
+  ctx.closePath();
+  fillInk(true);
+
+  // --- untere Wand: schwarze Tinte ---
+  ctx.beginPath();
+  ctx.moveTo(-CFG.margin, H+over);
+  traceEdge(botY);
+  ctx.lineTo(W+CFG.margin, H+over);
+  ctx.closePath();
+  fillInk(false);
+
+  // --- blaue Innenkante + Glanz entlang der Tunnelöffnung ---
+  blueEdge(topY);
+  blueEdge(botY);
+
+  // --- Spieler (Demo) ---
+  ctx.save();
+  ctx.fillStyle = player.alive ? '#e9e2cf' : '#d11f38';
+  ctx.shadowColor='rgba(42,159,230,.7)'; ctx.shadowBlur=12;
+  ctx.beginPath(); ctx.arc(W*player.xFrac, player.y, player.r, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  if (player.flash>0){ ctx.fillStyle='rgba(209,31,56,'+(player.flash*0.25)+')'; ctx.fillRect(0,0,W,H); }
+}
+
+function fillInk(isTop){
+  // schwarze, leicht ölige Füllung mit dezentem Innenverlauf
+  const g = isTop ? ctx.createLinearGradient(0,0,0,H*0.5) : ctx.createLinearGradient(0,H,0,H*0.5);
+  g.addColorStop(0,'#000000'); g.addColorStop(1,'#0b0d12');
+  ctx.fillStyle=g; ctx.fill();
+}
+
+function blueEdge(getY){
+  // weicher blauer Glow
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(cols[0].wx - scrollX, getY(cols[0]));
+  traceEdge(getY);
+  ctx.strokeStyle='rgba(42,159,230,0.55)'; ctx.lineWidth=4.5; ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.shadowColor='rgba(42,159,230,0.9)'; ctx.shadowBlur=14; ctx.stroke();
+  // heller Glanz-Kern
+  ctx.shadowBlur=0; ctx.strokeStyle='rgba(180,225,255,0.85)'; ctx.lineWidth=1.4; ctx.stroke();
+  ctx.restore();
+}
+
+/* ============================================================
+   7) LOOP  –  60 FPS, dt-basiert, mobil-optimiert
+   ============================================================ */
+let last = performance.now();
+function frame(now){
+  let dt = (now - last)/1000; last = now;
+  if (dt > 0.05) dt = 0.05;          // große Lücken (Tab-Wechsel) begrenzen
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
