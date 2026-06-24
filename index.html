@@ -164,6 +164,7 @@ const WALLTEX3_SRC="walltex3.png";
   const CFG = {
     gravityY:0.82, thrustY:0.74, drag:0.852, maxVY:8.6,
     baseSpeed:3.4, speedGain:0.00024, maxSpeed:9.0,
+    diffRampM:1500, diffShrink:0.5, diffFloorHalf:0.09,
     refXFrac:0.34, faceFlip:false,
     emberR:9, hitboxMul:0.66, nearMiss:22, pxPerMeter:18,
     minClear:0.125, introMeters:20, introHalf:0.30,
@@ -237,11 +238,13 @@ const WALLTEX3_SRC="walltex3.png";
   function bumpTop(d){return (CFG.bumpAmp1*pulse(d*CFG.bumpF1a+P[5]) + CFG.bumpAmp2*pulse(d*CFG.bumpF2a+P[6]))*H;}
   function bumpBot(d){return (CFG.bumpAmp1*pulse(d*CFG.bumpF1b+P[7]) + CFG.bumpAmp2*pulse(d*CFG.bumpF2b+P[8]))*H;}
   function introK(d){ const introDist=CFG.introMeters*CFG.pxPerMeter; let k=Math.min(1,Math.max(0,d/introDist)); return k*k*(3-2*k); } // smoothstep: 0 am Start -> 1 nach Intro
+  function diffF(d){ return Math.min(1,Math.max(0,(d/CFG.pxPerMeter)/CFG.diffRampM)); } // 0..1: Strecke wird mit der Distanz schwerer
   function edges(d){
     const k=introK(d);
     const dw=d+(fbm(d*CFG.warpF+50)-0.5)*2*CFG.warpAmp*k;        // Domain-Warping (eingeblendet)
     const cy=0.5*H*(1-k)+centerLine(dw)*k;
-    const hb=(CFG.introHalf*H)*(1-k)+halfBase(dw)*k;
+    const hbS=Math.max(CFG.diffFloorHalf*H, halfBase(dw)*(1-CFG.diffShrink*diffF(d))); // Spalt verengt sich mit der Distanz (mit Boden)
+    const hb=(CFG.introHalf*H)*(1-k)+hbS*k;
     let t=cy-hb+(bumpTop(dw)+surf(d,-1))*k;
     let b=cy+hb-(bumpBot(dw)+surf(d, 1))*k;
     const mc=CFG.minClear*H;
@@ -307,7 +310,7 @@ const WALLTEX3_SRC="walltex3.png";
     ember.vy=(ember.vy+ay*scale)*CFG.drag;
     const mv=CFG.maxVY*scale;if(ember.vy>mv)ember.vy=mv;if(ember.vy<-mv)ember.vy=-mv;
     ember.y+=ember.vy;
-    speed=Math.min(CFG.maxSpeed*scale,(CFG.baseSpeed+ember.dist*CFG.speedGain)*scale);
+    speed=CFG.baseSpeed*scale; // konstante Geschwindigkeit (Schwierigkeit kommt ueber die Strecke)
     ember.dist+=speed;
     trail.push({y:ember.y,dist:ember.dist});if(trail.length>CFG.trailMax)trail.shift();
     const e=edges(ember.dist),hit=CFG.emberR*CFG.hitboxMul*scale;
