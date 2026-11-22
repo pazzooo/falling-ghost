@@ -74,7 +74,11 @@
   .scorebox .sv { font-family:var(--pix); font-size:22px; line-height:1.2; color:var(--red); margin:3px 0 4px; }
   .scorebox .sb { font-family:var(--pix); font-size:8px; letter-spacing:.04em; color:var(--ink-dim); }
   #modeTag { position:absolute; top:calc(44px + env(safe-area-inset-top,0px)); right:14px; font-family:var(--pix); font-size:8px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); pointer-events:none; text-align:right; }
-  #mute { position:absolute; top:calc(12px + env(safe-area-inset-top,0px)); right:14px; font-family:var(--pix); font-size:8px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); background:rgba(234,226,207,.6); border:2px solid var(--ink); border-radius:0; padding:7px 9px; cursor:pointer; z-index:5; }
+  #tr { position:absolute; top:calc(12px + env(safe-area-inset-top,0px)); right:14px; display:flex; gap:6px; z-index:5; }
+  #g { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #c { position:relative; }
+  #stage.three #c { background:transparent; }
+  #mute, #gfx { font-family:var(--pix); font-size:8px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); background:rgba(234,226,207,.6); border:2px solid var(--ink); border-radius:0; padding:7px 9px; cursor:pointer; }
   /* Pixel-Logo unten links */
   #brand { position:absolute; left:12px; bottom:calc(12px + env(safe-area-inset-bottom,0px)); pointer-events:none; font-family:var(--pix); line-height:1.15; z-index:4; text-shadow:2px 2px 0 rgba(28,23,20,.4); }
   #brand .b1 { font-size:13px; color:var(--ink); }
@@ -104,7 +108,7 @@
 <main id="play">
 <div id="stage">
   <canvas id="c"></canvas>
-  <button id="mute">Klang an</button>
+  <div id="tr"><button id="gfx">3D an</button><button id="mute">Klang an</button></div>
   <div id="hud" class="hidden">
     <div class="scorebox">
       <div class="sl">Score</div>
@@ -196,8 +200,9 @@ const WALLTEX3_SRC="walltex3.png";
     function whoosh(v){if(!ready)return;const t=AC.currentTime;const s=AC.createBufferSource();s.buffer=noiseBuf;const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.setValueAtTime(600,t);bp.frequency.exponentialRampToValueAtTime(2600,t+0.18);bp.Q.value=6;const g=AC.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.10*v,t+0.03);g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);s.connect(bp);bp.connect(g);g.connect(master);s.start(t);s.stop(t+0.25);}
     function chime(){if(!ready)return;const t=AC.currentTime;[880,1320].forEach((f,i)=>{const o=AC.createOscillator();o.type='sine';o.frequency.value=f;const g=AC.createGain();const st=t+i*0.07;g.gain.setValueAtTime(0,st);g.gain.linearRampToValueAtTime(0.10,st+0.01);g.gain.exponentialRampToValueAtTime(0.0001,st+0.5);o.connect(g);g.connect(master);o.start(st);o.stop(st+0.55);});}
     function death(){if(!ready)return;const t=AC.currentTime;const o=AC.createOscillator();o.type='triangle';o.frequency.setValueAtTime(240,t);o.frequency.exponentialRampToValueAtTime(46,t+0.55);const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(1800,t);f.frequency.exponentialRampToValueAtTime(180,t+0.5);const g=AC.createGain();g.gain.setValueAtTime(0.22,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);o.connect(f);f.connect(g);g.connect(master);o.start(t);o.stop(t+0.62);const s=AC.createBufferSource();s.buffer=noiseBuf;const ng=AC.createGain();ng.gain.setValueAtTime(0.16,t);ng.gain.exponentialRampToValueAtTime(0.0001,t+0.3);const nf=AC.createBiquadFilter();nf.type='lowpass';nf.frequency.value=900;s.connect(nf);nf.connect(ng);ng.connect(master);s.start(t);s.stop(t+0.32);}
+    function pause(){if(AC&&AC.state==='running')AC.suspend();}
     function setMute(m){muted=m;if(master)master.gain.setTargetAtTime(m?0:0.5,AC.currentTime,0.05);}
-    return {init,resume,enterPlay,leavePlay,thrust,whoosh,chime,death,setMute,isMuted:()=>muted};
+    return {init,resume,pause,enterPlay,leavePlay,thrust,whoosh,chime,death,setMute,isMuted:()=>muted};
   })();
 
   let W=0,H=0,DPR=1,scale=1;
@@ -209,6 +214,13 @@ const WALLTEX3_SRC="walltex3.png";
   let shake=0, particles=[], wob=0, nearGlow=0, wasNear=false, leanCur=0;
   let camY=0, milestoneFlash=0, hitFlash=0, lastMile=0, timeScale=1, hitStop=0;
   let trail=[];
+  // --- Persistenz: Bestwerte + Einstellungen ueberleben einen Neustart ---
+  const store={get(k,d){try{const v=localStorage.getItem('fg.'+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem('fg.'+k,JSON.stringify(v));}catch(e){}}};
+  best=Object.assign(best,store.get('best',{}));
+  // --- 3D-Renderer: wird von ghost3d.js angedockt. Ohne WebGL/Modul-Support bleibt alles 2D. ---
+  let R3=null, use3D=store.get('3d',true);
+  // Testmodus: ?bot (Autopilot), ?bot&m=1300 (Start bei 1300 m)
+  const BOT=/[?&]bot\b/.test(location.search), BOTM=+((location.search.match(/[?&]m=(\d+)/)||[])[1]||0);
 
   function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
   function strSeed(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return (h^h>>>16)>>>0;}
@@ -255,7 +267,7 @@ const WALLTEX3_SRC="walltex3.png";
   function menuEdges(d){return {t:(0.5-CFG.introHalf+0.012*Math.sin(d*0.004))*H, b:(0.5+CFG.introHalf-0.012*Math.sin(d*0.004+1.5))*H};}
   function biome(d){return 0.5+0.5*Math.sin(d*CFG.biomeFreq);}
 
-  function resize(){DPR=Math.min(window.devicePixelRatio||1,2);W=stage.clientWidth;H=stage.clientHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);scale=H/800;}
+  function resize(){DPR=Math.min(window.devicePixelRatio||1,2);W=stage.clientWidth;H=stage.clientHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);scale=H/800;if(R3)R3.setSize(W,H,DPR);}
   window.addEventListener('resize', resize);
 
   function press(){SND.init();SND.resume();if(state==='play'){ember.held=true;SND.thrust(true);}else start();}
@@ -276,9 +288,9 @@ const WALLTEX3_SRC="walltex3.png";
   const $=id=>document.getElementById(id);
   function start(){
     initSeed();
-    ember.dist=0;const e0=edges(0);ember.y=(e0.t+e0.b)*0.5;ember.vy=0;ember.held=false;
+    ember.dist=BOT?BOTM*CFG.pxPerMeter:0;const e0=edges(ember.dist);ember.y=(e0.t+e0.b)*0.5;ember.vy=0;ember.held=false;
     speed=CFG.baseSpeed*scale;particles=[];trail=[];shake=0;wob=0;leanCur=0;
-    camY=0;milestoneFlash=0;hitFlash=0;lastMile=0;timeScale=1;hitStop=0;wasNear=false;
+    camY=0;milestoneFlash=0;hitFlash=0;lastMile=Math.floor(meters()/CFG.milestone);timeScale=1;hitStop=0;wasNear=false;
     state='play';SND.enterPlay();
     $('start').classList.add('hidden');$('over').classList.add('hidden');$('hud').classList.remove('hidden');$('brand').classList.remove('hidden');$('hudBest').textContent=best[mode];
     const tag=$('modeTag');tag.classList.remove('hidden');tag.textContent=mode==='daily'?('Taeglich - '+shortDate()):'Endlos';
@@ -288,7 +300,8 @@ const WALLTEX3_SRC="walltex3.png";
   function die(){
     if(state!=='play')return;
     state='dead';hitStop=CFG.hitStopMs;hitFlash=1;SND.death();SND.leavePlay();
-    const m=meters();if(m>best[mode])best[mode]=m;
+    const m=meters();if(m>best[mode]){best[mode]=m;store.set('best',best);}
+    try{if(navigator.vibrate)navigator.vibrate(45);}catch(e){}
     setTimeout(()=>{for(let i=0;i<36;i++){const ang=Math.random()*Math.PI*2,sp=Math.random()*5+1;particles.push({x:refX(),y:ember.y,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,life:1,r:Math.random()*3.6+1,red:Math.random()>0.45});}shake=18;},CFG.hitStopMs);
     setTimeout(showOver,560);
   }
@@ -306,6 +319,7 @@ const WALLTEX3_SRC="walltex3.png";
 
   function step(){
     if(state!=='play')return;
+    if(BOT){const e=edges(ember.dist+speed*8);ember.held=ember.y+ember.vy*5>(e.t+e.b)*0.5;}
     const ay=ember.held?-CFG.thrustY:CFG.gravityY;
     ember.vy=(ember.vy+ay*scale)*CFG.drag;
     const mv=CFG.maxVY*scale;if(ember.vy>mv)ember.vy=mv;if(ember.vy<-mv)ember.vy=-mv;
@@ -326,13 +340,18 @@ const WALLTEX3_SRC="walltex3.png";
 
   function draw(){
     ensurePat();
-    if(hitStop>0){ctx.save();bg();tunnel();inkTrail();character();ctx.restore();blot();return;}
+    const three=!!(R3&&use3D);
+    if(hitStop>0){
+      if(three){render3D(0,0);ctx.clearRect(0,0,W,H);ctx.save();edge(-1,true);edge(1,true);inkTrail();character();ctx.restore();}
+      else{ctx.save();bg();tunnel();inkTrail();character();ctx.restore();}
+      blot();return;}
     let sx=0,sy=0;if(shake>0){sx=(Math.random()-0.5)*shake;sy=(Math.random()-0.5)*shake;shake*=0.86;if(shake<0.4)shake=0;}
     const tcy=Math.max(-H*0.12,Math.min(H*0.12,-ember.vy*CFG.camLead));camY+=(tcy-camY)*0.1;
+    if(three){render3D(sx,sy+camY);ctx.clearRect(0,0,W,H);}
     ctx.save();ctx.translate(sx,sy+camY);
-    bg();
-    if(state==='menu'){ menuFrames(); heroGhost(); }
-    else { tunnel();inkTrail();if(state==='play')character();parts(); }
+    if(!three)bg();
+    if(state==='menu'){ if(!three)menuFrames(); heroGhost(); }
+    else { if(three){edge(-1,true);edge(1,true);}else tunnel(); inkTrail();if(state==='play')character();parts(); }
     ctx.restore();
     const vg=ctx.createRadialGradient(W/2,H*0.5,H*0.25,W/2,H*0.5,H*0.85);
     vg.addColorStop(0,'rgba(40,60,90,0)');vg.addColorStop(1,'rgba(20,30,45,0.18)');
@@ -379,11 +398,20 @@ const WALLTEX3_SRC="walltex3.png";
     fillInk(()=>{ctx.beginPath();ctx.moveTo(-40,-40);ctx.lineTo(W+40,-40);for(let x=W+10;x>=-10;x-=st){const d=menuScroll+(x-refX());ctx.lineTo(x,menuEdges(d).t);}ctx.closePath();}, 8*scale);
     fillInk(()=>{ctx.beginPath();ctx.moveTo(-40,H+40);ctx.lineTo(W+40,H+40);for(let x=W+10;x>=-10;x-=st){const d=menuScroll+(x-refX());ctx.lineTo(x,menuEdges(d).b);}ctx.closePath();}, -8*scale);
   }
-  function edge(which){
+  // 3D-Ansicht: Waende kommen aus ghost3d.js; die 2D-Ebene liefert nur Geist, Spur, Partikel, Effekte
+  function render3D(tx,ty){
+    const menu=state==='menu', k=introK(ember.dist);
+    R3.render({tx,ty,scroll:worldScroll(),refX:refX(),menu,edgeFn:menu?menuEdges:edges,
+      ghostX:menu?W*0.5:W*0.5+(refX()-W*0.5)*k, ghostY:menu?H*0.5:ember.y, vy:menu?0:ember.vy,
+      held:ember.held&&state==='play', nearGlow:state==='play'?nearGlow:0, dead:state==='dead',
+      fade2:wallFade(600,40), fade3:wallFade(1200,40)});
+  }
+  function edge(which,glowOnly){
+    if(glowOnly&&!(nearGlow>0.01&&state==='play'))return;
     const st=4;ctx.beginPath();
     for(let x=-10;x<=W+10;x+=st){const d=ember.dist+(x-refX());const e=edges(d);const ye=which<0?e.t:e.b;if(x<=-10)ctx.moveTo(x,ye);else ctx.lineTo(x,ye);}
     if(nearGlow>0.01&&state==='play'){ctx.strokeStyle=cssv('--blue');ctx.globalAlpha=0.3+nearGlow*0.6;ctx.lineWidth=2+nearGlow*4;ctx.shadowColor=cssv('--blue');ctx.shadowBlur=14*nearGlow;ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;}
-    ctx.strokeStyle='rgba(234,226,207,0.16)';ctx.lineWidth=1.4;ctx.stroke();
+    if(!glowOnly){ctx.strokeStyle='rgba(234,226,207,0.16)';ctx.lineWidth=1.4;ctx.stroke();}
   }
 
   function inkTrail(){
@@ -445,6 +473,18 @@ const WALLTEX3_SRC="walltex3.png";
   $('mute').addEventListener('click',e=>{e.stopPropagation();SND.init();const m=!SND.isMuted();SND.setMute(m);e.target.textContent=m?'Klang aus':'Klang an';});
   $('shareBtn').addEventListener('click',e=>{e.stopPropagation();const m=meters();const txt=mode==='daily'?('FALLING GHOST - Taeglich '+dailyKey+'\nStrecke: '+m+' m\nSchaffst du es weiter?'):('FALLING GHOST - Endlos\nStrecke: '+m+' m');const t=$('toast');if(navigator.share){navigator.share({text:txt}).catch(()=>{});}else if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>{t.textContent='In Zwischenablage kopiert';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1600);});}});
   $('over').addEventListener('pointerdown',e=>{if(e.target.id==='over')start();});
+  // App im Hintergrund: Schub loslassen, Ton anhalten
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){release();SND.pause();}else SND.resume();});
+
+  // --- 3D an/aus (gespeichert). Button erscheint erst, wenn der 3D-Renderer bereit ist. ---
+  function applyGfx(){const on=!!(R3&&use3D);stage.classList.toggle('three',on);if(R3)R3.setVisible(on);const b=$('gfx');b.textContent=use3D?'3D an':'3D aus';b.style.display=R3?'':'none';}
+  $('gfx').addEventListener('click',e=>{e.stopPropagation();use3D=!use3D;store.set('3d',use3D);applyGfx();});
+  window.__fgAttach3D=(factory)=>{
+    try{R3=factory({stage,images:{bg:bgImg,wall:[wtex,wtex2,wtex3]}});R3.setSize(W,H,DPR);}
+    catch(err){console.warn('3D nicht verfuegbar, nutze 2D:',err);R3=null;}
+    applyGfx();
+  };
+  applyGfx();
 
   // --- Werbung: Platzhalter-Hook. Aktiviert vorhandene Ad-Slots.
   //     Solange nur Platzhalter da sind, passiert nichts (Spiel laeuft normal).
@@ -458,7 +498,13 @@ const WALLTEX3_SRC="walltex3.png";
   }
 
   initSeed();resize();initAds();requestAnimationFrame(loop);
+  if(BOT)setTimeout(()=>{if(state==='menu')start();},600);
 })();
+</script>
+<!-- 3D-Renderer (three.js). Faellt bei fehlendem WebGL automatisch auf 2D zurueck. -->
+<script type="module">
+  import { createRenderer3D } from './ghost3d.js';
+  if (window.__fgAttach3D) window.__fgAttach3D(createRenderer3D);
 </script>
 </body>
 </html>
